@@ -35,29 +35,36 @@ router.post('/', async (req, res) => {
 
     // Check in Doctor table
     user = await Doctor.findOne({ where: { email } });
-    if (user && await bcrypt.compare(password, user.password)) {
-        const doctorData = user.get({plain: true});
-        const {password: _, ...doctorWithoutPassword} = doctorData;
+    if (user) {
+        if (await bcrypt.compare(password, user.password)) {
+            const doctorData = user.get({plain: true});
+            const {password: _, ...doctorWithoutPassword} = doctorData;
 
-        if (user.status === 'Approved') {     
-            // Generate JWT
-            const token = jwt.sign(
-                { id: user.id, role: 'doctor' },
-                process.env.JWT_SECRET,
-                { expiresIn: process.env.JWT_EXPIRATION }
-            );
+            if (user.status === 'Approved') {     
+                // Generate JWT
+                const token = jwt.sign(
+                    { id: user.id, role: 'doctor' },
+                    process.env.JWT_SECRET,
+                    { expiresIn: process.env.JWT_EXPIRATION }
+                );
 
-            return res.json({
-                success: "true",
-                message: "Doctor Login Successful",
-                token,
-                role: 'doctor',
-                user: doctorWithoutPassword
-            });
+                return res.json({
+                    success: "true",
+                    message: "Doctor Login Successful",
+                    token,
+                    role: 'doctor',
+                    user: doctorWithoutPassword
+                });
+            } else {
+                return res.status(403).json({
+                    success: false,
+                    message: "Your account is not approved yet. Please wait until approval."
+                });
+            }
         } else {
-            return res.status(403).json({
-                success: false,
-                message: "Your account is not approved yet. Please wait until approval."
+            return res.status(400).json({
+                success: false,   
+                message: 'Password did not match'
             });
         }
     }

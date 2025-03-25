@@ -1,9 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const bcrypt = require('bcrypt');
 const {Admin} = require('../models/index');
-const Doctor = require('../models/Doctor');
-const Patient = require('../models/Patient');
 
 router.post('/admin/registration', async (req, res) => {
     const {name, email, password} = req.body;

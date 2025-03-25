@@ -51,7 +51,7 @@ const Doctor = (sequelize) => {
                 }
             },
             beforeUpdate: async (doctor) => {
-                if (doctor.password) {
+                if (doctor.changed("password")) {
                     doctor.password = await bcrypt.hash(doctor.password, 10);
                 }
             }
