@@ -12,10 +12,11 @@ const sequelize = new Sequelize(
     port: process.env.DB_PORT || 3306, // Default port for MySQL, change to 5432 for PostgreSQL
     logging: false,                // Disable logging in Sequelize (optional)
     dialectOptions: {
-      ssl: {
-        require: true,
-        rejectUnauthorized: false,  // This is sometimes necessary to bypass self-signed certificates
-      }
+      // ssl: {
+      //   require: true,
+      //   rejectUnauthorized: false,  // This is sometimes necessary to bypass self-signed certificates
+      // }
+      ssl: false
     }
   }
 );

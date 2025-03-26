@@ -177,4 +177,40 @@ router.get('/my-appointments', checkIfPatient, async (req, res) => {
     }
 })
 
+router.get('/profile', checkIfPatient, async (req, res) => {
+    const {patient_id} = req.body;
+    if (!patient_id) {
+        return res.status(401).json({
+            success: false,
+            message: 'You need to login'
+        });
+    }
+
+    try {
+        const patient = await Patient.findOne({
+            where: {
+                id: patient_id
+            }
+        });
+        if (patient) {
+            return res.status(200).json({
+                success: true,
+                message: 'Patient profile',
+                data: patient
+            });
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: 'No patient found'
+            });
+        }
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: "An error occurred while fetching your profile",
+            error: err.message
+        });
+    }
+})
+
 module.exports = router

@@ -72,7 +72,7 @@ const checkIfDoctor = async (req, res, next) => {
         
         if (decoded.role === 'doctor') {
             req.body.doctor_id = decoded.id;
-            next(); // User is an admin, proceed to the next middleware or route handler
+            next(); // User is an doctor, proceed to the next middleware or route handler
         } else {
             return res.status(403).json({
                 success: false,
@@ -306,6 +306,26 @@ router.get("/time_slots", async (req, res) => {
             message: "List of time slots",
             data: appointments
         })
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message
+        });
+    }
+});
+
+router.get("/profile", checkIfDoctor, async (req, res) => {
+    try {
+        const doctor = await Doctor.findOne({
+            where: {
+                id: req.body.doctor_id
+            }
+        });
+        res.status(200).json({
+            success: true,
+            message: "List of all doctors",
+            data: doctor
+        });
     } catch (err) {
         res.status(500).json({
             success: false,
