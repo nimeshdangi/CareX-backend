@@ -37,6 +37,36 @@ app.get("/", (req, res) => {
     res.send("Hello from backend");
 })
 
+app.get("/auth", (req, res) => {
+    const token = req.headers.authorization;
+
+    if(!token) {
+        return res.status(401).json({
+            success: false,
+            message: "No token provided"
+        })
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        res.status(200).json({
+            success: true,
+            data: decoded
+        });
+    } catch (error) {
+        if (error.name === "TokenExpiredError") {
+            return res.status(401).json({
+                success: false,
+                message: "Token expired"
+            })
+        }
+        res.status(401).json({
+            success: false,
+            message: "Invalid token"
+        })
+    }
+});
+
 app.use("/login", loginRoutes);
 app.use("/test", testRoutes);
 app.use("/doctor", doctorRoutes);

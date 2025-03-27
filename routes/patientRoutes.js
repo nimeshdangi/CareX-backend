@@ -190,6 +190,9 @@ router.get('/profile', checkIfPatient, async (req, res) => {
         const patient = await Patient.findOne({
             where: {
                 id: patient_id
+            },
+            attributes: {
+                exclude: ['password', 'createdAt', 'updatedAt']
             }
         });
         if (patient) {
@@ -208,6 +211,85 @@ router.get('/profile', checkIfPatient, async (req, res) => {
         res.status(500).json({
             success: false,
             message: "An error occurred while fetching your profile",
+            error: err.message
+        });
+    }
+})
+
+router.put('/profile', checkIfPatient, async (req, res) => {
+    const {patient_id} = req.body;
+    if (!patient_id) {
+        return res.status(401).json({
+            success: false,
+            message: 'You need to login'
+        });
+    }
+
+    try {
+        const updatedPatient = await Patient.update({
+            name: req.body.name,
+            email: req.body.email,
+            phone_number: req.body.phone_number,
+            address: req.body.address
+        }, {
+            where: {
+                id: patient_id
+            }
+        });
+        if (updatedPatient) {
+            return res.status(200).json({
+                success: true,
+                message: 'Patient profile updated successfully'
+            });
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: 'Patient profile could not be updated'
+            });
+        }
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: "An error occurred while updating your profile",
+            error: err.message
+        });
+    }
+});
+
+router.post('/review', checkIfPatient, async (req, res) => {
+    const {patient_id} = req.body;
+    if (!patient_id) {
+        return res.status(401).json({
+            success: false,
+            message: 'You need to login'
+        });
+    }
+
+    try {
+        const updatedPatient = await Patient.update({
+            rating: req.body.rating,
+            comment: req.body.comment,
+            doctor_id: req.body.doctor_id
+        }, {
+            where: {
+                id: patient_id
+            }
+        });
+        if (updatedPatient) {
+            return res.status(200).json({
+                success: true,
+                message: 'Patient review updated successfully'
+            });
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: 'Patient review could not be updated'
+            });
+        }
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: "An error occurred while updating your review",
             error: err.message
         });
     }
