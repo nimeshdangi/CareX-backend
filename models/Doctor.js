@@ -28,6 +28,10 @@ const Doctor = (sequelize) => {
             type: DataTypes.STRING,
             allowNull: false
         },
+        image: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
         documents: {
             type: DataTypes.TEXT,
             allowNull: false
