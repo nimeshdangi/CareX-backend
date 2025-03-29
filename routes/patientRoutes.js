@@ -2,9 +2,9 @@ const express = require('express');
 const path = require("path");
 const multer = require('multer');
 const router = express.Router();
-const {Admin, Doctor, Patient, Appointment} = require('../models/index');
+const {Admin, Doctor, Patient, Appointment, Review} = require('../models/index');
 const jwt = require('jsonwebtoken');
-const { Op } = require('sequelize');
+const { Op, where, Sequelize } = require('sequelize');
 
 // Set up storage for multer
 const storage = multer.diskStorage({
@@ -186,7 +186,16 @@ router.get("/past-appointments", checkIfPatient, async(req, res) => {
             include: [
                 {
                     model: Doctor,
-                    attributes: {exclude: ['password']}
+                    attributes: {exclude: ['password']},
+                    include: [
+                        {
+                            model: Review,
+                            where: {
+                                patient_id
+                            },
+                            required: false
+                        }
+                    ]
                 }
             ]
         });
@@ -355,30 +364,27 @@ router.post('/review', checkIfPatient, async (req, res) => {
     }
 
     try {
-        const updatedPatient = await Patient.update({
+        const newReview = await Review.create({
             rating: req.body.rating,
             comment: req.body.comment,
-            doctor_id: req.body.doctor_id
-        }, {
-            where: {
-                id: patient_id
-            }
+            doctor_id: req.body.doctor_id,
+            patient_id: patient_id
         });
-        if (updatedPatient) {
+        if (newReview) {
             return res.status(200).json({
                 success: true,
-                message: 'Patient review updated successfully'
+                message: 'Review added successfully'
             });
         } else {
             return res.status(400).json({
                 success: false,
-                message: 'Patient review could not be updated'
+                message: 'Review could not be added'
             });
         }
     } catch (err) {
         res.status(500).json({
             success: false,
-            message: "An error occurred while updating your review",
+            message: "An error occurred while adding your review",
             error: err.message
         });
     }

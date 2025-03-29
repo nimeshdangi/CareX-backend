@@ -39,4 +39,4 @@ Patient.hasMany(Review, { foreignKey: 'patient_id' });
 Review.belongsTo(Doctor, { foreignKey: 'doctor_id' });
 Doctor.hasMany(Review, { foreignKey: 'doctor_id' });
 
-module.exports = { sequelize, Admin, Doctor, Patient, Appointment };
+module.exports = { sequelize, Admin, Doctor, Patient, Appointment, Review };

@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const {Admin, Doctor, Patient, Appointment} = require('../models/index');
+const {Admin, Doctor, Patient, Appointment, Review} = require('../models/index');
 const multer = require('multer');
 const path = require("path");
 const jwt = require("jsonwebtoken");
-const { where, Op } = require('sequelize');
+const { where, Op, Sequelize } = require('sequelize');
 
 // Set up storage for multer
 const storage = multer.diskStorage({
@@ -231,7 +231,7 @@ router.put("/approve/:id", checkIfAdmin, async (req, res) => {
 });
 
 router.post("/appointment", checkIfDoctor, async (req, res) => {
-    // console.log(req.body);
+    console.log(req.body);
     const { doctor_id, start_date_time, end_date_time } = req.body;
 
     // console.log(req.body);
@@ -394,6 +394,40 @@ router.put("/profile", checkIfDoctor, async (req, res) => {
         });
     }
 });
+
+router.get("/review", checkIfDoctor, async (req, res) => {
+    const {doctor_id} = req.body;
+    try {
+        const reviews = await Review.findAll({
+            where: {
+                doctor_id: doctor_id
+            },
+            include: [
+                {
+                    model: Patient,
+                    attributes: ['name', 'image']
+                }
+            ]
+        });
+        const averageRating = await Review.findOne({
+            where: {
+                doctor_id: doctor_id
+            },
+            attributes: [[Sequelize.fn('AVG', Sequelize.col('rating')), 'averageRating']],
+        })
+        res.status(200).json({
+            success: true,
+            message: "List of reviews",
+            data: reviews,
+            averageRating: averageRating
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message
+        });
+    }
+})
 
 router.get("/:id", async (req, res) => {
     const { id } = req.params;
