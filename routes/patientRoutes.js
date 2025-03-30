@@ -2,7 +2,7 @@ const express = require('express');
 const path = require("path");
 const multer = require('multer');
 const router = express.Router();
-const {Admin, Doctor, Patient, Appointment, Review} = require('../models/index');
+const {Admin, Doctor, Patient, Appointment, Review, Notification} = require('../models/index');
 const jwt = require('jsonwebtoken');
 const { Op, where, Sequelize } = require('sequelize');
 
@@ -135,6 +135,14 @@ router.post('/book-appointment', checkIfPatient, async (req, res) => {
     }
 
     try {
+        const appointment = await Appointment.findByPk(appointment_id);
+        if (!appointment) {
+            return res.status(404).json({
+                success: false,
+                message: 'Appointment not found'
+            });
+        }
+        const patient = await Patient.findByPk(patient_id);
         const updatedAppointment = await Appointment.update({
             patient_id: patient_id,
             status: "Booked"
@@ -145,6 +153,12 @@ router.post('/book-appointment', checkIfPatient, async (req, res) => {
         });
 
         if (updatedAppointment) {
+            await Notification.create({
+                appointment_id: appointment_id,
+                doctor_id: appointment.doctor_id,
+                title: "New Appointment",
+                message: `Patient ${patient.name} has booked an appointment from ${(new Date(appointment.start_date_time)).toLocaleTimeString('en-US', {hour: "numeric", minute: "numeric", hour12: true, timeZone: "Asia/Katmandu"})} to ${(new Date(appointment.end_date_time)).toLocaleTimeString('en-US', {hour: "numeric", minute: "numeric", hour12: true, timeZone: "Asia/Katmandu"})} on ${(new Date(appointment.start_date_time)).toLocaleDateString('en-US', {year: "numeric", month: "long", day: "numeric"})}`,
+            })
             return res.status(200).json({
                 success: true,
                 message: 'Appointment booked successfully'

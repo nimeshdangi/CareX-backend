@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const {Admin, Doctor, Patient, Appointment, Review} = require('../models/index');
+const {Admin, Doctor, Patient, Appointment, Review, Notification} = require('../models/index');
 const multer = require('multer');
 const path = require("path");
 const jwt = require("jsonwebtoken");
@@ -169,11 +169,50 @@ router.post('/registration', upload.single('documents'), handleMulterError, asyn
 
 router.get("/", async (req, res) => {
     try {
+        let keywords = req.query.search || '';
+        if (!keywords) {
+            keywords = [];
+        } else if (typeof keywords === 'string') {
+            // Split the string into an array by commas or spaces
+            keywords = keywords.split(/[\s,]+/);
+        } else if (Array.isArray(keywords)) {
+            // If keywords is already an array, do nothing
+        } else {
+            // Wrap single keyword in an array
+            keywords = [keywords];
+        }
+
+        // Build the search conditions
+        const conditions = {
+            status: "Approved"
+        };
+
+        if (keywords.length > 0) {
+            // Create an array of conditions for each keyword
+            const keywordConditions = keywords.map(keyword => ({
+                [Op.or]: [
+                    {
+                        name: {
+                            [Op.like]: `%${keyword}%`
+                        }
+                    },
+                    {
+                        specification: {
+                            [Op.like]: `%${keyword}%`
+                        }
+                    }
+                ]
+            }));
+
+            // Combine all keyword conditions using [Op.and] if you want doctors who match all keywords
+            // Or use [Op.or] if you want doctors who match any keyword
+            conditions[Op.or] = keywordConditions;
+        }
+
         const doctors = await Doctor.findAll({
-            where: {
-                status: "Approved"
-            }
+            where: conditions
         });
+
         res.status(200).json({
             success: true,
             message: "List of doctors available",
@@ -276,6 +315,36 @@ router.get("/appointment", checkIfDoctor, async (req, res) => {
         res.status(200).json({
             success: true,
             message: "List of your appointments",
+            data: appointments
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: "An error occurred while retrieving appointments",
+        });
+    }
+});
+
+router.get("/upcoming-appointments", checkIfDoctor, async (req, res) => {
+    const {doctor_id} = req.body;
+    console.log("Upcoming Appointments");
+    try {
+        const appointments = await Appointment.findAll({
+            where: {
+                doctor_id: doctor_id,
+                start_date_time: {
+                    [Op.gt]: new Date()
+                }
+            },
+            include: [
+                {
+                    model: Patient
+                }
+            ]
+        });
+        res.status(200).json({
+            success: true,
+            message: "List of your upcoming appointments",
             data: appointments
         });
     } catch (err) {
@@ -420,6 +489,99 @@ router.get("/review", checkIfDoctor, async (req, res) => {
             message: "List of reviews",
             data: reviews,
             averageRating: averageRating
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message
+        });
+    }
+})
+
+router.get("/notifications", checkIfDoctor, async (req, res) => {
+    const {doctor_id} = req.body;
+    try {
+        const notifications = await Notification.findAll({
+            where: {
+                doctor_id: doctor_id
+            }
+        });
+        res.status(200).json({
+            success: true,
+            message: "List of notifications",
+            data: notifications
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message
+        });
+    }
+})
+
+router.get("/notification/:notification_id", checkIfDoctor, async (req, res) => {
+    const {notification_id} = req.params;
+    try {
+        const notification = await Notification.findOne({
+            where: {
+                id: notification_id
+            }
+        });
+        res.status(200).json({
+            success: true,
+            message: "Notification details",
+            data: notification
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message
+        });
+    }
+})
+
+router.put("/read-notification/:notification_id", checkIfDoctor, async (req, res) => {
+    const {notification_id} = req.params;
+    try {
+        const notification = await Notification.update({
+            isRead: true
+        }, {
+            where: {
+                id: notification_id
+            }
+        });
+
+        if(!notification) {
+            return res.status(404).json({
+                success: false,
+                message: "Notification not found"
+            });
+        }
+        res.status(200).json({
+            success: true,
+            message: "Notification marked as read"
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message
+        });
+    }
+})
+
+router.get("/unread-notifications", checkIfDoctor, async (req, res) => {
+    const {doctor_id} = req.body;
+    try {
+        const count = await Notification.count({
+            where: {
+                doctor_id: doctor_id,
+                isRead: false
+            }
+        });
+        res.status(200).json({
+            success: true,
+            message: "List of unread notifications",
+            data: count
         });
     } catch (err) {
         res.status(500).json({

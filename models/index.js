@@ -26,6 +26,7 @@ const Doctor = require("./Doctor")(sequelize);
 const Patient = require("./Patient")(sequelize);
 const Appointment = require("./Appointment")(sequelize);
 const Review = require("./Review")(sequelize);
+const Notification = require("./Notification")(sequelize);
 
 Appointment.belongsTo(Doctor, { foreignKey: 'doctor_id' });
 Doctor.hasMany(Appointment, { foreignKey: 'doctor_id' });
@@ -39,4 +40,10 @@ Patient.hasMany(Review, { foreignKey: 'patient_id' });
 Review.belongsTo(Doctor, { foreignKey: 'doctor_id' });
 Doctor.hasMany(Review, { foreignKey: 'doctor_id' });
 
-module.exports = { sequelize, Admin, Doctor, Patient, Appointment, Review };
+Notification.belongsTo(Doctor, { foreignKey: 'doctor_id' });
+Doctor.hasMany(Notification, { foreignKey: 'doctor_id' });
+
+Notification.belongsTo(Appointment, { foreignKey: 'appointment_id' });
+Appointment.hasMany(Notification, { foreignKey: 'appointment_id' });
+
+module.exports = { sequelize, Admin, Doctor, Patient, Appointment, Review, Notification };
