@@ -5,4 +5,13 @@ const getAppointmentDetails = async (appointmentId) => {
     return appointment;
 };
 
-module.exports = {getAppointmentDetails}
+const saveAppointmentData = async (appointmentId, data) => {
+    const updatedAppointment = await Appointment.update(data, {
+        where: {
+            id: appointmentId
+        }
+    });
+    return updatedAppointment;
+};
+
+module.exports = {getAppointmentDetails, saveAppointmentData}

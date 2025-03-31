@@ -10,7 +10,8 @@ const testRoutes = require("./routes/testRoutes");
 const loginRoutes = require("./routes/loginRoutes");
 const doctorRoutes = require("./routes/doctorRoutes");
 const patientRoutes = require("./routes/patientRoutes");
-const {getAppointmentDetails} = require("./services/appointment");
+const appointmentRoutes = require("./routes/appointmentRoutes");
+const {getAppointmentDetails, saveAppointmentData} = require("./services/appointment");
 const jwt = require("jsonwebtoken");
 
 const { Server } = require("socket.io");
@@ -68,6 +69,7 @@ app.get("/auth", (req, res) => {
 });
 
 app.use("/login", loginRoutes);
+app.use("/appointment", appointmentRoutes);
 app.use("/test", testRoutes);
 app.use("/doctor", doctorRoutes);
 app.use("/patient", patientRoutes);
@@ -95,17 +97,20 @@ io.on('connection', (socket) => {
             // console.log('Token:', token);
             // console.log("Appointment Id:", appointmentId);
             const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-            const doctorId = decodedToken.role === 'doctor' ? decodedToken.doctorId : null;
-            const patientId = decodedToken.role === 'patient' ? decodedToken.patientId : null;
+            const doctorId = decodedToken.role === 'doctor' ? decodedToken.id : null;
+            const patientId = decodedToken.role === 'patient' ? decodedToken.id : null;
 
             // Fetch appointment details from DB
             const appointment = await getAppointmentDetails(appointmentId); // Fetch appointment
             // console.log("Appointment:", appointment);
-            // console.log("Doctor Id:", appointment.doctorId);
+            // console.log("Doctor Id from database:", appointment.doctor_id);
+            // console.log("Doctor Id from token:", doctorId);
+            // console.log("Patient Id from database:", appointment.patient_id);
+            // console.log("Patient Id from token:", patientId);
 
             // Check if the user is allowed to join based on token and appointment time
             if (
-                (doctorId === appointment.doctorId || patientId === appointment.patientId)) {
+                (doctorId === appointment.doctor_id || patientId === appointment.patient_id)) {
 
                 // Join the appointment room
                 const room = `appointment_${appointmentId}`;
@@ -115,13 +120,15 @@ io.on('connection', (socket) => {
                     // First peer to join is the caller
                     socket.join(room);
                     socket.emit('caller');  // Inform this peer they are the caller
-                    console.log('Caller has joined the room');
+                    console.log('Caller has joined the room:', `appointment_${appointmentId}`);
                 } else if (clients.size === 1) {
                     // Second peer to join is the answerer
                     socket.join(room);
                     io.to(room).emit('peerJoined');  // Notify all peers that someone has joined
                     socket.emit('answerer');  // Inform this peer they are the answerer
-                    console.log('Answerer has joined the room');
+                    console.log('Answerer has joined the room:', `appointment_${appointmentId}`);
+
+                    socket.emit('updateData', { symptoms: appointment.symptoms, diagnosis: appointment.diagnosis, prescription: appointment.prescription });
                 } else {
                     socket.emit('error', { message: 'Room is full. Only doctor and patient are allowed.' });
                 }
@@ -132,6 +139,17 @@ io.on('connection', (socket) => {
             console.error('Error:', error.message);
             socket.emit('error', { message: 'Authentication failed or invalid token.', error: error.message });
         }
+    });
+
+    socket.on('updateData', async (data) => {
+        const { appointmentId, symptoms, diagnosis, prescription } = data;
+
+        console.log("Data received from client:", data)
+        // Update the database with new data
+        await saveAppointmentData(appointmentId, { symptoms, diagnosis, prescription });
+
+        // Broadcast the latest data to other clients
+        io.to(`appointment_${appointmentId}`).emit('updateData', { symptoms, diagnosis, prescription });
     });
 
     socket.on('disconnect', () => {
