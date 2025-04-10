@@ -1,6 +1,7 @@
 require('dotenv').config();
+const fs = require('fs');
+const https = require('https');
 const express = require("express");
-const app = express();
 const cors = require("cors");
 const port = 5000;
 const path = require("path");
@@ -13,9 +14,16 @@ const patientRoutes = require("./routes/patientRoutes");
 const appointmentRoutes = require("./routes/appointmentRoutes");
 const {getAppointmentDetails, saveAppointmentData} = require("./services/appointment");
 const jwt = require("jsonwebtoken");
-const axios = require("axios");
 
 const { Server } = require("socket.io");
+
+const app = express();
+
+// Load SSL certificate files
+const options = {
+    key: fs.readFileSync("./certs/server.key"),
+    cert: fs.readFileSync("./certs/server.cert")
+};
 
 // Serve the 'uploads' folder as static
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -59,7 +67,7 @@ app.get("/auth", (req, res) => {
         if (error.name === "TokenExpiredError") {
             return res.status(401).json({
                 success: false,
-                message: "Token expired. Please login again."
+                message: "Token expired"
             })
         }
         res.status(401).json({
@@ -75,35 +83,11 @@ app.use("/test", testRoutes);
 app.use("/doctor", doctorRoutes);
 app.use("/patient", patientRoutes);
 
-// API for khalti payment
-app.post("/khalti-api", async (req, res) => {
-    const payload = req.body;
-    const khaltiResponse = await axios.post(
-      "https://a.khalti.com/api/v2/epayment/initiate/",
-      payload,
-      {
-        headers: {
-          Authorization: `Key ${process.env.KHALTI_SECRET_KEY}`,
-        },
-      }
-    );
-  
-    if (khaltiResponse) {
-      res.json({
-        success: true,
-        data: khaltiResponse?.data,
-      });
-    } else {
-      res.json({
-        success: false,
-        message: "something went wrong",
-      });
-    }
-});
+const server = https.createServer(options, app);
 
-const server = app.listen(port, () => {
+server.listen(port, () => {
     // console.log("JWT SECRET:", process.env.JWT_SECRET);
-    console.log(`Application is running on: http://localhost:${port}`);
+    console.log(`Application is running on: https://localhost:${port}`);
 })
 
 const io = new Server(server, {

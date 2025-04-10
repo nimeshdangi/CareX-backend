@@ -2,7 +2,7 @@ const express = require('express');
 const path = require("path");
 const multer = require('multer');
 const router = express.Router();
-const {Admin, Doctor, Patient, Appointment, Review, Notification} = require('../models/index');
+const {Admin, Doctor, Patient, Appointment, Review, Notification, Payment} = require('../models/index');
 const jwt = require('jsonwebtoken');
 const { Op, where, Sequelize } = require('sequelize');
 
@@ -44,7 +44,7 @@ const checkIfPatient = async (req, res, next) => {
         if (!authHeader) {
             return res.status(401).json({
                 success: false,
-                message: 'No token provided'
+                message: 'Unauthorized. Please login'
             });
         }
 
@@ -66,7 +66,7 @@ const checkIfPatient = async (req, res, next) => {
         console.error("JWT Verification Error: ", error.message);
         return res.status(401).json({
             success: false,
-            message: 'Invalid token'
+            message: 'Invalid token. Please login again'
         });
     }
 };
@@ -77,7 +77,7 @@ router.post('/registration', async (req, res) => {
     if (!name || !email || !phone_number || !address || !password) {
         return res.status(400).json({
             success: false,
-            message: 'All fields are required'
+            message: 'Please fill all the required fields'
         });
     }
 
@@ -123,6 +123,85 @@ router.post('/registration', async (req, res) => {
         });
     }
 });
+
+router.post('/payment-complete', checkIfPatient, async (req, res) => {
+    const {appointment_id, payment_data} = req.body;
+
+    if (!appointment_id || !payment_data) {
+        return res.status(400).json({
+            success: false,
+            message: 'Not enough information provided'
+        });
+    }
+
+    try {
+        const payment = await Payment.findOne({
+            where: {
+                appointment_id
+            }
+        });
+
+        if (payment) {
+            const paymentDetails = JSON.parse(payment.payment_data);
+            const parsedDetails = JSON.parse(paymentDetails);
+
+            if(parsedDetails.status === "Completed") {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Payment already completed'
+                });
+            }
+        } else {
+            const payment = await Payment.create({
+                appointment_id,
+                payment_data: JSON.stringify(payment_data)
+            });
+
+            if (payment) {
+                const updatedAppointment = await Appointment.update({
+                    status: "Booked",
+                    patient_id: req.body.patient_id
+                }, {
+                    where: {
+                        id: appointment_id
+                    }
+                });
+
+                const appointment = await Appointment.findByPk(appointment_id);
+                const patient = await Patient.findByPk(appointment.patient_id);
+
+                const isNotified = await Notification.findOne({
+                    where: {
+                        appointment_id: appointment_id,
+                    }
+                });
+                
+                if (!isNotified) {
+                    await Notification.create({
+                        appointment_id: appointment_id,
+                        doctor_id: appointment.doctor_id,
+                        title: "New Appointment",
+                        message: `Patient ${patient.name} has booked an appointment from ${(new Date(appointment.start_date_time)).toLocaleTimeString('en-US', {hour: "numeric", minute: "numeric", hour12: true, timeZone: "Asia/Katmandu"})} to ${(new Date(appointment.end_date_time)).toLocaleTimeString('en-US', {hour: "numeric", minute: "numeric", hour12: true, timeZone: "Asia/Katmandu"})} on ${(new Date(appointment.start_date_time)).toLocaleDateString('en-US', {year: "numeric", month: "long", day: "numeric"})}`,
+                    })
+                }
+
+                if (updatedAppointment) {
+                    return res.status(200).json({
+                        success: true,
+                        message: 'Booked after Payment completed successfully'
+                    });
+                }
+            }
+        }
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: "An error occurred while completing the payment",
+            error: err.message
+        });
+    }
+});
+
 
 router.post('/book-appointment', checkIfPatient, async (req, res) => {
     const {appointment_id, patient_id} = req.body;
@@ -173,6 +252,52 @@ router.post('/book-appointment', checkIfPatient, async (req, res) => {
         res.status(500).json({
             success: false,
             message: "An error occurred while booking the appointment",
+            error: err.message
+        });
+    }
+});
+
+router.get("/appointment/:id", checkIfPatient, async(req, res) => {
+    const {id} = req.params;
+
+    if (!id) {
+        return res.status(400).json({
+            success: false,
+            message: 'Not enough information provided'
+        });
+    }
+
+    try {
+        const appointment = await Appointment.findByPk(id, {
+            include: [
+                {
+                    model: Doctor,
+                    attributes: { exclude: ['password'] }
+                }
+            ]
+        });
+        if (!appointment) {
+            return res.status(404).json({
+                success: false,
+                message: 'Appointment not found'
+            });
+        }
+        if (appointment.patient_id !== req.body.patient_id) {
+            return res.status(403).json({
+                success: false,
+                message: 'You do not have permission to view this appointment'
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Appointment found',
+            data: appointment
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: "An error occurred while fetching the appointment",
             error: err.message
         });
     }
@@ -279,6 +404,90 @@ router.get('/my-appointments', checkIfPatient, async (req, res) => {
         });
     }
 })
+
+router.get('/current-appointments', checkIfPatient, async (req, res) => {
+    const { patient_id } = req.body;
+
+    if (!patient_id) {
+        return res.status(401).json({
+            success: false,
+            message: 'You need to login'
+        });
+    }
+
+    try {
+        const now = new Date();
+        const fifteenMinutesBeforeNow = new Date(now.getTime() - 15 * 60 * 1000);
+
+        // console.log("Current Time:", now);
+        // console.log("Fifteen Minutes Before Now:", fifteenMinutesBeforeNow);
+
+        // const appointment = await Appointment.findOne({
+        //     where: {
+        //         id: "11"
+        //     }
+        // })
+        // console.log("Appointment:", appointment);
+        // console.log("Is now inside start point", now < fifteenMinutesBeforeNow);
+        // console.log("Is now inside start time", now > appointment.start_date_time);
+        // console.log("Is now inside end point", now > appointment.end_date_time);
+        // console.log("Is now inside both points", now > fifteenMinutesBeforeNow && now < appointment.end_date_time);
+        // console.log("Is now inside time", now > appointment.start_date_time && now < appointment.end_date_time);
+
+        const appointments = await Appointment.findAll({
+            where: {
+                patient_id,
+                [Op.or]: [
+                    {
+                        start_date_time: {
+                            [Op.lte]: now
+                        },
+                        end_date_time: {
+                            [Op.gte]: now
+                        }
+                    },
+                    {
+                        start_date_time: {
+                            [Op.between]: [now, fifteenMinutesBeforeNow]
+                        }
+                    }
+                ]
+                // start_date_time: {
+                //     [Op.lte]: fifteenMinutesBeforeNow
+                // },
+                // end_date_time: {
+                //     [Op.gte]: now
+                // }
+            },
+            attributes: { exclude: ['doctor_id'] },
+            include: [
+                {
+                    model: Doctor,
+                    attributes: { exclude: ['password'] }
+                }
+            ]
+        });
+
+        if (appointments.length > 0) {
+            return res.status(200).json({
+                success: true,
+                message: 'List of your current appointments',
+                data: appointments
+            });
+        } else {
+            return res.status(404).json({
+                success: false,
+                message: 'No current appointments found'
+            });
+        }
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: "An error occurred while fetching current appointments",
+            error: err.message
+        });
+    }
+});
 
 router.get('/profile', checkIfPatient, async (req, res) => {
     const {patient_id} = req.body;

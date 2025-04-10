@@ -4,7 +4,7 @@ const {Admin, Doctor, Patient, Appointment, Review, Notification} = require('../
 const multer = require('multer');
 const path = require("path");
 const jwt = require("jsonwebtoken");
-const { where, Op, Sequelize } = require('sequelize');
+const { Op, Sequelize, fn, col } = require('sequelize');
 
 // Set up storage for multer
 const storage = multer.diskStorage({
@@ -47,7 +47,7 @@ const checkIfAdmin = async (req, res, next) => {
         const token = authHeader.trim();
 
         // console.log("Token:", token);
-        const decodedToken = jwt.decode(token);
+        // const decodedToken = jwt.decode(token);
         // console.log("Decoded Token:", decodedToken);
         // console.log("Secret Key:", process.env.JWT_SECRET);
         // Verify and decode the JWT
@@ -256,6 +256,7 @@ router.put("/approve/:id", checkIfAdmin, async (req, res) => {
         const updatedDoctor = await doctor.update({
             status: "Approved"
         });
+
         res.status(200).json({
             success: true,
             message: "Doctor approved successfully",
@@ -282,7 +283,60 @@ router.post("/appointment", checkIfDoctor, async (req, res) => {
         });
     }
 
+    // check if start_date_time and end_date_time are not 0000-00-00 00:00:00
+    if (start_date_time === "0000-00-00 00:00:00" || end_date_time === "0000-00-00 00:00:00") {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid date format"
+        });
+    }
+
+    // Check if the appointment time is in the past
+    const currentDateTime = new Date();
+    if (start_date_time < currentDateTime) {
+        return res.status(400).json({
+            success: false,
+            message: "Appointment time cannot be in the past"
+        });
+    }
+
+    // check if the time difference between start_date_time and end_date_time is 15, 30, or 60 minutes
+    const startDateTime = new Date(start_date_time);
+    const endDateTime = new Date(end_date_time);
+    const timeDifference = (endDateTime - startDateTime) / (1000 * 60); // in minutes
+
+    if (timeDifference !== 15 && timeDifference !== 30 && timeDifference !== 60) {
+        return res.status(400).json({
+            success: false,
+            message: "Appointment duration must be 15, 30, or 60 minutes"
+        });
+    }
+
     try {
+        // Check for overlapping appointments with at least a 5-minute gap
+        const overlappingAppointment = await Appointment.findOne({
+            where: {
+                doctor_id,
+                [Op.or]: [
+                    {
+                        start_date_time: {
+                            [Op.lt]: new Date(end_date_time).getTime() + 5 * 60 * 1000
+                        },
+                        end_date_time: {
+                            [Op.gt]: new Date(start_date_time).getTime() - 5 * 60 * 1000
+                        }
+                    }
+                ]
+            }
+        });
+
+        if (overlappingAppointment) {
+            return res.status(400).json({
+                success: false,
+                message: "Appointment time overlaps with an existing appointment. Please allow at least a 5-minute gap."
+            });
+        }
+
         const newAppointment = await Appointment.create({
             doctor_id,
             start_date_time,
@@ -325,6 +379,116 @@ router.get("/appointment", checkIfDoctor, async (req, res) => {
     }
 });
 
+router.get("/appointment/:id", checkIfDoctor, async (req, res) => {
+    const id = req.params.id;
+    try {
+        const appointment = await Appointment.findByPk(id);
+        if (!appointment) {
+            return res.status(404).json({
+                success: false,
+                message: "Appointment not found"
+            });
+        }
+        if (appointment.doctor_id !== req.body.doctor_id) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not authorized to view this appointment"
+            })
+        }
+        res.status(200).json({
+            success: true,
+            message: "Appointment details",
+            data: appointment
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: "An error occurred while retrieving appointment details",
+        });
+    }
+});
+
+router.put("/appointment-status/:id/", checkIfDoctor, async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    console.log(status);
+
+    if (!status) {
+        return res.status(400).json({
+            success: false,
+            message: "Status is required"
+        });
+    }
+
+    try {
+        const appointment = await Appointment.findByPk(id);
+
+        if (!appointment) {
+            return res.status(404).json({
+                success: false,
+                message: "Appointment not found"
+            });
+        }
+
+        if (appointment.doctor_id !== req.body.doctor_id) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not authorized to update this appointment"
+            });
+        }
+
+        const updatedAppointment = await appointment.update({ status });
+
+        res.status(200).json({
+            success: true,
+            message: "Appointment status updated successfully",
+            data: updatedAppointment
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message
+        });
+    }
+});
+
+router.get("/appointments-today", checkIfDoctor, async (req, res) => {
+    const {doctor_id} = req.body;
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0); // Set to the start of the day
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999); // Set to the end of the day
+    // console.log("startOfDay", startOfDay);
+    // console.log("endOfDay", endOfDay);
+    try {
+        const appointments = await Appointment.findAll({
+            where: {
+                doctor_id: doctor_id,
+                start_date_time: {
+                    [Op.between]: [startOfDay, endOfDay]
+                }
+            },
+            include: [
+                {
+                    model: Patient,
+                    attributes: ['name']
+                }
+            ],
+            order: [['start_date_time', 'DESC']]
+        });
+        res.status(200).json({
+            success: true,
+            message: "List of your appointments today",
+            data: appointments
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: "An error occurred while retrieving appointments",
+        });
+    }
+});
+
 router.get("/upcoming-appointments", checkIfDoctor, async (req, res) => {
     const {doctor_id} = req.body;
     console.log("Upcoming Appointments");
@@ -355,9 +519,51 @@ router.get("/upcoming-appointments", checkIfDoctor, async (req, res) => {
     }
 });
 
+router.get("/past-appointments", checkIfDoctor, async (req, res) => {
+    const {doctor_id} = req.body;
+    try {
+        const appointments = await Appointment.findAll({
+            where: {
+                doctor_id: doctor_id,
+                end_date_time: {
+                    [Op.lt]: new Date()
+                }
+            },
+            include: [
+                {
+                    model: Patient
+                }
+            ],
+            order: [['end_date_time', 'DESC']]
+        });
+        res.status(200).json({
+            success: true,
+            message: "List of your past appointments",
+            data: appointments
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: "An error occurred while retrieving appointments",
+        });
+    }
+});
+
 router.get("/time_slots", async (req, res) => {
     const {doctor_id, date} = req.query;
+    
     console.log(date);
+    const currentDateTime = new Date();
+    const isToday = new Date(date).toDateString() === currentDateTime.toDateString();
+
+    const timeCondition = isToday
+        ? {
+            end_date_time: {
+                [Op.gt]: currentDateTime
+            }
+        }
+        : {};
+    
     try {
         const appointments = await Appointment.findAll({
             where: {
@@ -368,7 +574,8 @@ router.get("/time_slots", async (req, res) => {
                 end_date_time: {
                     [Op.gte]: new Date(`${date} 00:00:00`)
                 },
-                status: "Not Booked"
+                status: "Not Booked",
+                ...timeCondition
             }
         })
 
@@ -397,7 +604,8 @@ router.get("/profile", checkIfDoctor, async (req, res) => {
         const doctor = await Doctor.findOne({
             where: {
                 id: req.body.doctor_id
-            }
+            },
+            attributes: { exclude: ['password', 'createdAt', 'updatedAt'] }
         });
         res.status(200).json({
             success: true,
@@ -453,8 +661,64 @@ router.put("/profile", checkIfDoctor, async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "Doctor profile updated successfully",
-            data: updatedDoctor
+            message: "Doctor profile updated successfully"
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message
+        });
+    }
+});
+
+router.get("/appointment-stats", checkIfDoctor, async (req, res) => {
+    const { doctor_id } = req.body;
+    try {
+        const completedAppointmentsCount = await Appointment.count({
+            where: {
+                doctor_id: doctor_id,
+                status: "Completed"
+            }
+        });
+
+        const uniquePatientsCount = await Appointment.count({
+            where: {
+                doctor_id: doctor_id,
+                status: "Completed"
+            },
+            distinct: true,
+            col: 'patient_id'
+        });
+
+        const appointmentsThisMonth = await Appointment.count({
+            where: {
+                doctor_id: doctor_id,
+                start_date_time: {
+                    [Op.gte]: new Date(new Date().setDate(1)),
+                    [Op.lt]: new Date(new Date().setMonth(new Date().getMonth() + 1, 1))
+                }
+            }
+        });
+
+        const appointmentsThisWeek = await Appointment.count({
+            where: {
+                doctor_id: doctor_id,
+                start_date_time: {
+                    [Op.gte]: new Date(new Date().setDate(new Date().getDate() - new Date().getDay())),
+                    [Op.lt]: new Date(new Date().setDate(new Date().getDate() + (6 - new Date().getDay())))
+                }
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "Appointment statistics retrieved successfully",
+            data: {
+                completedAppointmentsCount,
+                uniquePatientsCount,
+                appointmentsThisMonth,
+                appointmentsThisWeek
+            }
         });
     } catch (err) {
         res.status(500).json({
@@ -498,7 +762,7 @@ router.get("/review", checkIfDoctor, async (req, res) => {
     }
 })
 
-router.get("/review/:doctor_id", checkIfDoctor, async (req, res) => {
+router.get("/review/:doctor_id", async (req, res) => {
     const {doctor_id} = req.params;
     try {
         const reviews = await Review.findAll({
@@ -631,7 +895,31 @@ router.get("/unread-notifications", checkIfDoctor, async (req, res) => {
 router.get("/:id", async (req, res) => {
     const { id } = req.params;
     try {
-        const doctor = await Doctor.findOne({ where: { id } });
+        const doctor = await Doctor.findOne({
+            where: { id },
+            attributes: {
+                exclude: ['password'],
+                include: [
+                    [
+                        fn("AVG", col("reviews.rating")), // Calculate average rating
+                        "averageRating"
+                    ]
+                ]
+            },
+            include: [
+                {
+                    model: Review,
+                    as: 'reviews',
+                    include: [
+                        {
+                            model: Patient,
+                            attributes: ['name', 'image']
+                        }
+                    ]
+                }
+            ],
+            group: ['Doctor.id']
+        });
         if (!doctor) {
             return res.status(404).json({
                 success: false,
