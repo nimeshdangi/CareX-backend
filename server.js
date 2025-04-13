@@ -14,6 +14,7 @@ const patientRoutes = require("./routes/patientRoutes");
 const appointmentRoutes = require("./routes/appointmentRoutes");
 const {getAppointmentDetails, saveAppointmentData} = require("./services/appointment");
 const jwt = require("jsonwebtoken");
+const axios = require("axios");
 
 const { Server } = require("socket.io");
 
@@ -82,6 +83,32 @@ app.use("/appointment", appointmentRoutes);
 app.use("/test", testRoutes);
 app.use("/doctor", doctorRoutes);
 app.use("/patient", patientRoutes);
+
+// API for khalti payment
+app.post("/khalti-api", async (req, res) => {
+    const payload = req.body;
+    const khaltiResponse = await axios.post(
+      "https://a.khalti.com/api/v2/epayment/initiate/",
+      payload,
+      {
+        headers: {
+          Authorization: `Key ${process.env.KHALTI_SECRET_KEY}`,
+        },
+      }
+    );
+  
+    if (khaltiResponse) {
+      res.json({
+        success: true,
+        data: khaltiResponse?.data,
+      });
+    } else {
+      res.json({
+        success: false,
+        message: "something went wrong",
+      });
+    }
+});
 
 const server = https.createServer(options, app);
 
