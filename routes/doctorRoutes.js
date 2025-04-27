@@ -4,7 +4,7 @@ const {Admin, Doctor, Patient, Appointment, Review, Notification} = require('../
 const multer = require('multer');
 const path = require("path");
 const jwt = require("jsonwebtoken");
-const { Op, Sequelize, fn, col } = require('sequelize');
+const { Op, Sequelize, fn, col, literal } = require('sequelize');
 
 // Set up storage for multer
 const storage = multer.diskStorage({
@@ -902,7 +902,8 @@ router.get("/:id", async (req, res) => {
                 exclude: ['password'],
                 include: [
                     [
-                        fn("AVG", col("reviews.rating")), // Calculate average rating
+                        literal("AVG(reviews.rating)"),
+                        // fn("AVG", col("reviews.rating")), // Calculate average rating
                         "averageRating"
                     ]
                 ]
