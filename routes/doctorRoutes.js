@@ -919,7 +919,8 @@ router.get("/:id", async (req, res) => {
                     ]
                 }
             ],
-            group: ['Doctor.id']
+            group: ['Doctor.id', 'reviews.id', 'reviews->patient.id'],
+            limit: 1
         });
         if (!doctor) {
             return res.status(404).json({
