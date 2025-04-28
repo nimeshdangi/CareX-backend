@@ -4,7 +4,7 @@ const {Admin, Doctor, Patient, Appointment, Review, Notification} = require('../
 const multer = require('multer');
 const path = require("path");
 const jwt = require("jsonwebtoken");
-const { Op, Sequelize, fn, col, literal } = require('sequelize');
+const { Op, Sequelize, fn, col } = require('sequelize');
 
 // Set up storage for multer
 const storage = multer.diskStorage({
@@ -729,13 +729,45 @@ router.get("/appointment-stats", checkIfDoctor, async (req, res) => {
     }
 });
 
+// router.get("/review", checkIfDoctor, async (req, res) => {
+//     const {doctor_id} = req.body;
+//     try {
+//         const reviews = await Review.findAll({
+//             where: {
+//                 doctor_id: doctor_id
+//             },
+//             include: [
+//                 {
+//                     model: Patient,
+//                     attributes: ['name', 'image']
+//                 }
+//             ]
+//         });
+//         const averageRating = await Review.findOne({
+//             where: {
+//                 doctor_id: doctor_id
+//             },
+//             attributes: [[Sequelize.fn('AVG', Sequelize.col('rating')), 'averageRating']],
+//         })
+//         res.status(200).json({
+//             success: true,
+//             message: "List of reviews",
+//             data: reviews,
+//             averageRating: averageRating
+//         });
+//     } catch (err) {
+//         res.status(500).json({
+//             success: false,
+//             message: err.message
+//         });
+//     }
+// })
+
 router.get("/review", checkIfDoctor, async (req, res) => {
-    const {doctor_id} = req.body;
+    const { doctor_id } = req.body;
     try {
         const reviews = await Review.findAll({
-            where: {
-                doctor_id: doctor_id
-            },
+            where: { doctor_id },
             include: [
                 {
                     model: Patient,
@@ -743,33 +775,69 @@ router.get("/review", checkIfDoctor, async (req, res) => {
                 }
             ]
         });
-        const averageRating = await Review.findOne({
-            where: {
-                doctor_id: doctor_id
-            },
-            attributes: [[Sequelize.fn('AVG', Sequelize.col('rating')), 'averageRating']],
-        })
+
+        const avgRating = await Review.findOne({
+            where: { doctor_id },
+            attributes: [
+                [fn('AVG', col('rating')), 'averageRating']
+            ],
+            raw: true
+        });
+
         res.status(200).json({
             success: true,
             message: "List of reviews",
             data: reviews,
-            averageRating: averageRating
+            averageRating: avgRating?.averageRating || 0
         });
+
     } catch (err) {
         res.status(500).json({
             success: false,
             message: err.message
         });
     }
-})
+});
+
+// router.get("/review/:doctor_id", async (req, res) => {
+//     const {doctor_id} = req.params;
+//     try {
+//         const reviews = await Review.findAll({
+//             where: {
+//                 doctor_id: doctor_id
+//             },
+//             include: [
+//                 {
+//                     model: Patient,
+//                     attributes: ['name', 'image']
+//                 }
+//             ]
+//         });
+//         const averageRating = await Review.findOne({
+//             where: {
+//                 doctor_id: doctor_id
+//             },
+//             attributes: [[Sequelize.fn('AVG', Sequelize.col('rating')), 'averageRating']],
+//         })
+//         res.status(200).json({
+//             success: true,
+//             message: "List of reviews",
+//             data: reviews,
+//             averageRating: averageRating
+//         });
+//     } catch (err) {
+//         res.status(500).json({
+//             success: false,
+//             message: err.message
+//         });
+//     }
+// })
 
 router.get("/review/:doctor_id", async (req, res) => {
-    const {doctor_id} = req.params;
+    const { doctor_id } = req.params;
     try {
         const reviews = await Review.findAll({
-            where: {
-                doctor_id: doctor_id
-            },
+            where: { doctor_id },
             include: [
                 {
                     model: Patient,
@@ -777,25 +845,29 @@ router.get("/review/:doctor_id", async (req, res) => {
                 }
             ]
         });
-        const averageRating = await Review.findOne({
-            where: {
-                doctor_id: doctor_id
-            },
-            attributes: [[Sequelize.fn('AVG', Sequelize.col('rating')), 'averageRating']],
-        })
+
+        const avgRating = await Review.findOne({
+            where: { doctor_id },
+            attributes: [
+                [fn('AVG', col('rating')), 'averageRating']
+            ],
+            raw: true
+        });
+
         res.status(200).json({
             success: true,
             message: "List of reviews",
             data: reviews,
-            averageRating: averageRating
+            averageRating: avgRating?.averageRating || 0
         });
+
     } catch (err) {
         res.status(500).json({
             success: false,
             message: err.message
         });
     }
-})
+});
 
 router.get("/notifications", checkIfDoctor, async (req, res) => {
     const {doctor_id} = req.body;
@@ -893,20 +965,61 @@ router.get("/unread-notifications", checkIfDoctor, async (req, res) => {
     }
 })
 
+// router.get("/:id", async (req, res) => {
+//     const { id } = req.params;
+//     try {
+//         const doctor = await Doctor.findOne({
+//             where: { id },
+//             attributes: {
+//                 exclude: ['password'],
+//                 include: [
+//                     [
+//                         fn("AVG", col("reviews.rating")), // Calculate average rating
+//                         "averageRating"
+//                     ]
+//                 ]
+//             },
+//             include: [
+//                 {
+//                     model: Review,
+//                     as: 'reviews',
+//                     include: [
+//                         {
+//                             model: Patient,
+//                             attributes: ['name', 'image']
+//                         }
+//                     ]
+//                 }
+//             ],
+//             group: ['Doctor.id']
+//         });
+//         if (!doctor) {
+//             return res.status(404).json({
+//                 success: false,
+//                 message: "Doctor not found"
+//             });
+//         }
+//         res.status(200).json({
+//             success: true,
+//             message: "Doctor retrieved successfully",
+//             data: doctor
+//         });
+//     } catch (err) {
+//         res.status(500).json({
+//             success: false,
+//             message: err.message
+//         });
+//     }
+// });
+
 router.get("/:id", async (req, res) => {
     const { id } = req.params;
     try {
+        // Step 1: Find doctor normally without aggregation
         const doctor = await Doctor.findOne({
             where: { id },
             attributes: {
-                exclude: ['password'],
-                include: [
-                    [
-                        literal("AVG(reviews.rating)"),
-                        // fn("AVG", col("reviews.rating")), // Calculate average rating
-                        "averageRating"
-                    ]
-                ]
+                exclude: ['password']
             },
             include: [
                 {
@@ -919,21 +1032,34 @@ router.get("/:id", async (req, res) => {
                         }
                     ]
                 }
-            ],
-            group: ['Doctor.id', 'reviews.id', 'reviews->patient.id'],
-            limit: 1
+            ]
         });
+
         if (!doctor) {
             return res.status(404).json({
                 success: false,
                 message: "Doctor not found"
             });
         }
+
+        // Step 2: Find average rating separately
+        const avgRating = await Review.findOne({
+            where: { doctor_id: id },
+            attributes: [
+                [fn('AVG', col('rating')), 'averageRating']
+            ],
+            raw: true
+        });
+
         res.status(200).json({
             success: true,
             message: "Doctor retrieved successfully",
-            data: doctor
+            data: {
+                ...doctor.toJSON(),
+                averageRating: avgRating?.averageRating || 0
+            }
         });
+
     } catch (err) {
         res.status(500).json({
             success: false,
