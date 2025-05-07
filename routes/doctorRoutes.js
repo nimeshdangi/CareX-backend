@@ -7,14 +7,15 @@ const jwt = require("jsonwebtoken");
 const { Op, Sequelize, fn, col } = require('sequelize');
 
 // Set up storage for multer
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/doctors/'); // Directory to save the uploaded files
-    },
-    filename: function (req, file, cb) {
-        cb(null, Date.now() + path.extname(file.originalname)); // File naming convention
-    }
-});
+// const storage = multer.diskStorage({
+//     destination: function (req, file, cb) {
+//         cb(null, 'uploads/doctors/'); // Directory to save the uploaded files
+//     },
+//     filename: function (req, file, cb) {
+//         cb(null, Date.now() + path.extname(file.originalname)); // File naming convention
+//     }
+// });
+const storage = require("../cloudinary");
 
 // Initialize upload
 const upload = multer({ storage: storage });

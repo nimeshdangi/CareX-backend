@@ -7,14 +7,15 @@ const jwt = require('jsonwebtoken');
 const { Op, where, Sequelize } = require('sequelize');
 
 // Set up storage for multer
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/patients/'); // Directory to save the uploaded files
-    },
-    filename: function (req, file, cb) {
-        cb(null, Date.now() + path.extname(file.originalname)); // File naming convention
-    }
-});
+// const storage = multer.diskStorage({
+//     destination: function (req, file, cb) {
+//         cb(null, 'uploads/patients/'); // Directory to save the uploaded files
+//     },
+//     filename: function (req, file, cb) {
+//         cb(null, Date.now() + path.extname(file.originalname)); // File naming convention
+//     }
+// });
+const { storage } = require('../cloudinary');
 
 // Initialize upload
 const upload = multer({ storage: storage });
@@ -52,6 +53,7 @@ const checkIfPatient = async (req, res, next) => {
 
         // Verify and decode the JWT
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        console.log("Decoded JWT: ", decoded);
 
         if (decoded.role === 'patient') {
             req.body.patient_id = decoded.id;
