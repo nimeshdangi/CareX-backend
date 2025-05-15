@@ -11,6 +11,7 @@ const loginRoutes = require("./routes/loginRoutes");
 const doctorRoutes = require("./routes/doctorRoutes");
 const patientRoutes = require("./routes/patientRoutes");
 const appointmentRoutes = require("./routes/appointmentRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 const {getAppointmentDetails, saveAppointmentData} = require("./services/appointment");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
@@ -74,6 +75,7 @@ app.use("/appointment", appointmentRoutes);
 app.use("/test", testRoutes);
 app.use("/doctor", doctorRoutes);
 app.use("/patient", patientRoutes);
+app.use("/admin", adminRoutes);
 
 // API for khalti payment
 app.post("/khalti-api", async (req, res) => {

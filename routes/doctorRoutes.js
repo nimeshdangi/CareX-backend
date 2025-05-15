@@ -15,7 +15,7 @@ const { Op, Sequelize, fn, col } = require('sequelize');
 //         cb(null, Date.now() + path.extname(file.originalname)); // File naming convention
 //     }
 // });
-const storage = require("../cloudinary");
+const { storage } = require("../cloudinary");
 
 // Initialize upload
 const upload = multer({ storage: storage });
@@ -23,6 +23,15 @@ const upload = multer({ storage: storage });
 const asyncUpload = (req, res) => {
   return new Promise((resolve, reject) => {
     upload.single('image')(req, res, (err) => {
+      if (err) return reject(err);
+      resolve();
+    });
+  });
+};
+
+const uploadDocument = (req, res) => {
+  return new Promise((resolve, reject) => {
+    upload.single('documents')(req, res, (err) => {
       if (err) return reject(err);
       resolve();
     });
@@ -98,9 +107,11 @@ const checkIfDoctor = async (req, res, next) => {
     }
 }
 
-router.post('/registration', upload.single('documents'), handleMulterError, async (req, res) => {
+router.post('/registration', async (req, res) => {
+    await uploadDocument(req, res);
+
     const {name, email, phone_no, registrationNumber, specification, qualification, password} = req.body;
-    // console.log(req.body);
+    console.log(req.body);
     const document = req.file;
 
     // console.log("File:", req.file);
@@ -137,7 +148,8 @@ router.post('/registration', upload.single('documents'), handleMulterError, asyn
         })
     }
 
-    const fileName = document.filename;
+    // Check if the file is an image    
+    const fileName = req.file.path;
 
     try {
         const newDoctor = await Doctor.create({
