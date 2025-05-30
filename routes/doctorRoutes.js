@@ -478,9 +478,18 @@ router.get("/appointments-today", checkIfDoctor, async (req, res) => {
         const appointments = await Appointment.findAll({
             where: {
                 doctor_id: doctor_id,
-                start_date_time: {
-                    [Op.between]: [startOfDay, endOfDay]
-                }
+                [Op.or]: [
+                    {
+                    start_date_time: {
+                        [Op.between]: [startOfDay, endOfDay]
+                    }
+                    },
+                    {
+                    end_date_time: {
+                        [Op.between]: [startOfDay, endOfDay]
+                    }
+                    }
+                ]
             },
             include: [
                 {
